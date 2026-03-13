@@ -45,4 +45,3 @@ def parse_cpe_uri(cpe_str: str) -> dict[str, str]:
         }
 
     raise NotImplementedError(f"Unknown CPE URI format: {cpe_str}")
-
