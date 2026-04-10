@@ -3,7 +3,6 @@ from pydantic import (
     PositiveInt,
     SecretStr,
 )
-
 from src.models.configs import ConfigBaseSettings
 
 

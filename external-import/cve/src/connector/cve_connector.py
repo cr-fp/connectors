@@ -4,7 +4,6 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from pycti import OpenCTIConnectorHelper
-
 from src import ConfigLoader
 from src.services import CVEConverter
 from src.services.utils import (

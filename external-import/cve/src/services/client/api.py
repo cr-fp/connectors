@@ -2,7 +2,6 @@ import asyncio
 import logging
 
 import aiohttp
-
 from src.services.utils.rate_limiter import AsyncRateLimiter
 
 logger = logging.getLogger(__name__)
