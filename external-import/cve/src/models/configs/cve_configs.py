@@ -3,6 +3,7 @@ from pydantic import (
     PositiveInt,
     SecretStr,
 )
+
 from src.models.configs import ConfigBaseSettings
 
 
@@ -44,8 +45,4 @@ class _ConfigLoaderCVE(ConfigBaseSettings):
     cpe_max_concurrency: PositiveInt = Field(
         default=10,
         description="Maximum number of concurrent CPE resolution tasks when import_software is enabled.",
-    )
-    cpe_bundle_batch_size: PositiveInt = Field(
-        default=100,
-        description="Number of resolved CVEs whose CPE data to accumulate before sending a STIX bundle.",
     )

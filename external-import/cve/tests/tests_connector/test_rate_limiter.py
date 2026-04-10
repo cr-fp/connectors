@@ -73,9 +73,9 @@ async def test_concurrent_acquires_respect_limit():
     await asyncio.sleep(0.3)
 
     immediate = [t for t in acquired_times if t - acquired_times[0] < 0.5]
-    assert len(immediate) == NVD_MAX_REQUESTS, (
-        f"Expected {NVD_MAX_REQUESTS} immediate acquires, got {len(immediate)}"
-    )
+    assert (
+        len(immediate) == NVD_MAX_REQUESTS
+    ), f"Expected {NVD_MAX_REQUESTS} immediate acquires, got {len(immediate)}"
 
     for task in tasks:
         task.cancel()
@@ -99,9 +99,9 @@ async def test_reset_clears_state():
         await limiter.acquire()
     elapsed = time.monotonic() - t0
 
-    assert elapsed < 1.0, (
-        f"After reset, acquires should be instant, took {elapsed:.2f}s"
-    )
+    assert (
+        elapsed < 1.0
+    ), f"After reset, acquires should be instant, took {elapsed:.2f}s"
 
 
 async def test_reset_invalidates_lock():
@@ -144,9 +144,9 @@ async def test_sliding_window_releases_slots():
         t0 = time.monotonic()
         await limiter.acquire()
         elapsed = time.monotonic() - t0
-        assert elapsed < 0.2, (
-            f"Expected slot freed after window slide, took {elapsed:.2f}s"
-        )
+        assert (
+            elapsed < 0.2
+        ), f"Expected slot freed after window slide, took {elapsed:.2f}s"
     finally:
         rl_module.NVD_INTERVAL_SECONDS = original_interval
         rl_module.NVD_MAX_REQUESTS = original_max
