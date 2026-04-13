@@ -90,9 +90,7 @@ class ImportDocumentAIClient:
             # deduplicate objects based on their id
             bundle = deduplicate_bundle_objects(bundle)
             # filter relationships
-            bundle = filter_relationship_triplets(
-                bundle, allowed_relationship_triplets
-            )
+            bundle = filter_relationship_triplets(bundle, allowed_relationship_triplets)
             return bundle
         except stix2.exceptions.STIXError as e:
             self.helper.connector_logger.error(
