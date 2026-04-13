@@ -20,20 +20,13 @@ class ImportDocumentAIClient:
         self.helper = helper
         self.config = config
 
-        self._opencti_instance_id = (
-            self.helper.api.query(
-                """
+        self._opencti_instance_id = self.helper.api.query("""
                 query SettingsQuery {
                     settings {
                         id
                         }
                     }
-            """
-            )
-            .get("data", {})
-            .get("settings", {})
-            .get("id", "")
-        )
+            """).get("data", {}).get("settings", {}).get("id", "")
 
         # Define headers in session and update when needed
         headers = {
@@ -65,8 +58,8 @@ class ImportDocumentAIClient:
 
         except ConnectionError:
             raise ConnectionError(
-                "ImportDocumentAI webservice seems to be unreachable, \
-                have you configured your connector properly ?"
+                "ImportDocumentAI webservice seems to be unreachable, "
+                "have you configured your connector properly ?"
             )
         except requests.RequestException as err:
             error_msg = "[API] Error while fetching data: "
