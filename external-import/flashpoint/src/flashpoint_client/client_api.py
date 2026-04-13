@@ -206,6 +206,48 @@ class FlashpointClient:
                 else:
                     has_more = False
 
+    def iter_sightings_pages(
+        self, start_date: datetime, size: int = 500
+    ) -> Generator[list[dict], None, None]:
+        """
+        Iterate over sighting pages from Flashpoint Technical Intelligence v2 API.
+
+        :param start_date: Include sightings created on or after this datetime.
+        :param size: Pagination size, must be between 1 and 500.
+        :yield: Page of sightings.
+        """
+        page_size = max(1, min(size, 500))
+        url = self.api_base_url + "/technical-intelligence/v2/sightings"
+        params = {
+            "size": page_size,
+            "from": 0,
+            "sort": "created_at:asc",
+            "created_after": self._to_flashpoint_datetime(start_date),
+            "include_total_count": False,
+            "embed": "all",
+        }
+        fallback_from = 0
+
+        has_more = True
+        while has_more:
+            response = self.session.get(url, params=params)
+            response.raise_for_status()
+            response_json = response.json()
+            page_items = response_json.get("items")
+            if page_items:
+                yield page_items
+
+            next_page = (response_json.get("pagination") or {}).get("next")
+            if next_page:
+                url = next_page
+                params = None
+            else:
+                if params is not None and len(page_items) == page_size:
+                    fallback_from += page_size
+                    params["from"] = fallback_from
+                else:
+                    has_more = False
+
     def get_compromised_credential_sightings(
         self, since: datetime | None = None, fresh_only: bool = True
     ) -> Generator[CompromisedCredentialSighting, None, None]:

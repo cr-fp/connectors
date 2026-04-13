@@ -9,6 +9,7 @@ from stix2.exceptions import STIXError
 from .config_loader import ConfigLoader
 from .converter_to_stix import ConverterToStix
 from .indicator_converter_to_stix import IndicatorConverterToStix
+from .sighting_converter_to_stix import SightingConverterToStix
 
 
 class FlashpointConnector:
@@ -26,6 +27,10 @@ class FlashpointConnector:
         )
         self.converter_to_stix = ConverterToStix(self.helper)
         self.indicator_converter_to_stix = IndicatorConverterToStix(
+            helper=self.helper,
+            tlp_definition=self.config.flashpoint.indicator_tlp,
+        )
+        self.sighting_converter_to_stix = SightingConverterToStix(
             helper=self.helper,
             tlp_definition=self.config.flashpoint.indicator_tlp,
         )
@@ -83,6 +88,13 @@ class FlashpointConnector:
             )
         except Exception as ex:
             self.helper.log_error(f"An error occurred while sending STIX bundle: {ex}")
+
+    @staticmethod
+    def _serialize_stix_object(stix_object):
+        to_stix2_object = getattr(stix_object, "to_stix2_object", None)
+        if callable(to_stix2_object):
+            return to_stix2_object()
+        return stix_object
 
     def _import_reports(self, start_date: datetime) -> None:
         """
@@ -238,7 +250,7 @@ class FlashpointConnector:
                             all_octi_objects
                         )
                         all_stix_objects = [
-                            obj.to_stix2_object() for obj in all_octi_objects
+                            self._serialize_stix_object(obj) for obj in all_octi_objects
                         ]
                         self.helper.connector_logger.info(
                             "Sending indicators bundle for page",
@@ -274,6 +286,102 @@ class FlashpointConnector:
                 + " indicators have been processed), storing state "
                 + "(indicators_last_modified="
                 + current_state.get("indicators_last_modified", "N/A")
+                + ")"
+            )
+            self.helper.connector_logger.info(message)
+            if work_id is not None:
+                self.helper.api.work.to_processed(work_id, message)
+
+        except (KeyboardInterrupt, SystemExit):
+            self.helper.connector_logger.info(
+                "Connector stopped...",
+                {"connector_name": self.helper.connect_name},
+            )
+            sys.exit(0)
+        except Exception as err:
+            self.helper.connector_logger.error(err)
+
+    def _import_sightings(self, start_date: datetime) -> None:
+        try:
+            now = datetime.now(tz=timezone.utc)
+            current_state = self._get_state()
+            query_since = start_date - timedelta(seconds=1)
+
+            self.helper.connector_logger.info(
+                "Fetching sightings from Flashpoint v2 endpoint",
+                {"since": query_since.isoformat(timespec="seconds")},
+            )
+
+            work_id = None
+            number_sightings = 0
+            last_created = start_date
+            try:
+                for page_number, sightings_page in enumerate(
+                    self.client.iter_sightings_pages(query_since), start=1
+                ):
+                    page_octi_objects = (
+                        self.sighting_converter_to_stix.convert_sightings_page_to_stix(
+                            sightings_page
+                        )
+                    )
+                    if len(page_octi_objects) == 0:
+                        page_last_created = self._parse_iso_datetime(
+                            sightings_page[-1].get("created_at")
+                        )
+                        if page_last_created is not None:
+                            last_created = page_last_created
+                        current_state["sightings_last_created"] = last_created.isoformat()
+                        self._set_state(current_state)
+                        continue
+
+                    if work_id is None:
+                        friendly_name = (
+                            "Flashpoint Sightings run @ "
+                            + now.isoformat(timespec="seconds")
+                        )
+                        work_id = self.helper.api.work.initiate_work(
+                            self.helper.connect_id, friendly_name
+                        )
+
+                    all_octi_objects = [
+                        self.sighting_converter_to_stix.marking,
+                        self.sighting_converter_to_stix.author,
+                        *page_octi_objects,
+                    ]
+                    all_octi_objects = self._deduplicate_stix_objects(all_octi_objects)
+                    all_stix_objects = [
+                        self._serialize_stix_object(obj) for obj in all_octi_objects
+                    ]
+
+                    self.helper.connector_logger.info(
+                        "Sending sightings bundle for page",
+                        {
+                            "page": page_number,
+                            "sightings_count": len(sightings_page),
+                            "stix_objects_count": len(all_stix_objects),
+                        },
+                    )
+                    bundle = self.helper.stix2_create_bundle(all_stix_objects)
+                    self._send_bundle(work_id=work_id, serialized_bundle=bundle)
+
+                    page_last_created = self._parse_iso_datetime(
+                        sightings_page[-1].get("created_at")
+                    )
+                    if page_last_created is not None:
+                        last_created = page_last_created
+
+                    current_state["sightings_last_created"] = last_created.isoformat()
+                    self._set_state(current_state)
+                    number_sightings += len(sightings_page)
+            except Exception as e:
+                self.helper.log_error(str(e))
+
+            message = (
+                "Connector successfully run ("
+                + str(number_sightings)
+                + " sightings have been processed), storing state "
+                + "(sightings_last_created="
+                + current_state.get("sightings_last_created", "N/A")
                 + ")"
             )
             self.helper.connector_logger.info(message)
@@ -556,6 +664,23 @@ class FlashpointConnector:
                     {"since": indicators_start},
                 )
                 self._import_indicators(indicators_start)
+
+            if self.config.flashpoint.import_sightings:
+                sightings_start = self.config.flashpoint.import_start_date
+                if "sightings_last_created" in current_state:
+                    parsed = self._parse_iso_datetime(
+                        current_state["sightings_last_created"]
+                    )
+                else:
+                    parsed = None
+
+                if parsed is not None:
+                    sightings_start = parsed
+                self.helper.connector_logger.info(
+                    "Import Sightings enabled, going to fetch Sightings since:",
+                    {"since": sightings_start},
+                )
+                self._import_sightings(sightings_start)
 
             if self.config.flashpoint.import_communities:
                 self.helper.connector_logger.info(

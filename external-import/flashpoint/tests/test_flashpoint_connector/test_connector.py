@@ -12,6 +12,7 @@ def _build_config():
     config.flashpoint.import_start_date = datetime(2026, 1, 1, tzinfo=timezone.utc)
     config.flashpoint.import_reports = False
     config.flashpoint.import_indicators = False
+    config.flashpoint.import_sightings = False
     config.flashpoint.import_alerts = False
     config.flashpoint.import_communities = False
     config.flashpoint.import_ccm_alerts = False
@@ -332,6 +333,93 @@ def test_import_indicators_per_page_state_update():
     assert helper.set_state.call_count >= 3
 
 
+# --- _import_sightings ---
+
+
+def test_import_sightings_with_data():
+    helper = _build_helper()
+    connector = _build_connector(helper=helper)
+
+    mock_indicator_obj = Mock()
+    mock_indicator_obj.id = "indicator--1"
+    mock_indicator_obj.to_stix2_object.return_value = {"type": "indicator", "id": "indicator--1"}
+
+    raw_grouping_obj = Mock(spec=["id"])
+    raw_grouping_obj.id = "grouping--1"
+
+    converter_mock = Mock()
+    converter_mock.marking = Mock()
+    converter_mock.marking.id = "marking-1"
+    converter_mock.marking.to_stix2_object.return_value = {"id": "marking-1"}
+    converter_mock.author = Mock()
+    converter_mock.author.id = "author-1"
+    converter_mock.author.to_stix2_object.return_value = {"id": "author-1"}
+    converter_mock.convert_sightings_page_to_stix.return_value = [
+        mock_indicator_obj,
+        raw_grouping_obj,
+    ]
+    connector.sighting_converter_to_stix = converter_mock
+
+    page = [{"created_at": "2026-03-06T12:00:00+00:00"}]
+    connector.client.iter_sightings_pages.return_value = [page]
+
+    connector._import_sightings(datetime(2026, 1, 1, tzinfo=timezone.utc))
+
+    helper.api.work.initiate_work.assert_called_once()
+    helper.api.work.to_processed.assert_called_once()
+    assert helper.set_state.called
+    final_state = helper.set_state.call_args_list[-1][0][0]
+    assert final_state["sightings_last_created"] == "2026-03-06T12:00:00+00:00"
+
+
+def test_import_sightings_no_data():
+    helper = _build_helper()
+    connector = _build_connector(helper=helper)
+
+    converter_mock = Mock()
+    converter_mock.convert_sightings_page_to_stix.return_value = []
+    connector.sighting_converter_to_stix = converter_mock
+
+    page = [{"created_at": "2026-03-06T12:00:00+00:00"}]
+    connector.client.iter_sightings_pages.return_value = [page]
+
+    connector._import_sightings(datetime(2026, 1, 1, tzinfo=timezone.utc))
+
+    helper.api.work.initiate_work.assert_not_called()
+    helper.api.work.to_processed.assert_not_called()
+    final_state = helper.set_state.call_args_list[-1][0][0]
+    assert final_state["sightings_last_created"] == "2026-03-06T12:00:00+00:00"
+
+
+def test_import_sightings_per_page_state_update():
+    helper = _build_helper()
+    connector = _build_connector(helper=helper)
+
+    mock_indicator_obj = Mock()
+    mock_indicator_obj.id = "indicator--1"
+    mock_indicator_obj.to_stix2_object.return_value = {"type": "indicator", "id": "indicator--1"}
+
+    converter_mock = Mock()
+    converter_mock.marking = Mock()
+    converter_mock.marking.id = "marking-1"
+    converter_mock.marking.to_stix2_object.return_value = {"id": "marking-1"}
+    converter_mock.author = Mock()
+    converter_mock.author.id = "author-1"
+    converter_mock.author.to_stix2_object.return_value = {"id": "author-1"}
+    converter_mock.convert_sightings_page_to_stix.return_value = [mock_indicator_obj]
+    connector.sighting_converter_to_stix = converter_mock
+
+    page1 = [{"created_at": "2026-03-06T12:00:00+00:00"}]
+    page2 = [{"created_at": "2026-03-06T13:00:00+00:00"}]
+    connector.client.iter_sightings_pages.return_value = [page1, page2]
+
+    connector._import_sightings(datetime(2026, 1, 1, tzinfo=timezone.utc))
+
+    assert helper.set_state.call_count >= 2
+    final_state = helper.set_state.call_args_list[-1][0][0]
+    assert final_state["sightings_last_created"] == "2026-03-06T13:00:00+00:00"
+
+
 # --- _import_alerts ---
 
 
@@ -613,11 +701,30 @@ def test_process_data_indicators_misp_migration():
     )
 
 
+def test_process_data_sightings_with_last_created():
+    helper = _build_helper()
+    helper.get_state.return_value = {
+        "sightings_last_created": "2026-03-02T00:00:00+00:00"
+    }
+    config = _build_config()
+    config.flashpoint.import_sightings = True
+    connector = _build_connector(config=config, helper=helper)
+    connector.client.iter_sightings_pages.return_value = []
+
+    connector.process_data()
+
+    helper.connector_logger.info.assert_any_call(
+        "Import Sightings enabled, going to fetch Sightings since:",
+        {"since": datetime(2026, 3, 2, 0, 0, tzinfo=timezone.utc)},
+    )
+
+
 def test_process_data_all_imports_enabled():
     helper = _build_helper()
     config = _build_config()
     config.flashpoint.import_reports = True
     config.flashpoint.import_indicators = True
+    config.flashpoint.import_sightings = True
     config.flashpoint.import_alerts = True
     config.flashpoint.import_communities = True
     config.flashpoint.import_ccm_alerts = True
@@ -627,6 +734,7 @@ def test_process_data_all_imports_enabled():
     # Mock all import methods
     connector._import_reports = Mock()
     connector._import_indicators = Mock()
+    connector._import_sightings = Mock()
     connector._import_alerts = Mock()
     connector._import_communities = Mock()
     connector._import_ccm_alerts = Mock()
@@ -635,6 +743,7 @@ def test_process_data_all_imports_enabled():
 
     connector._import_reports.assert_called_once()
     connector._import_indicators.assert_called_once()
+    connector._import_sightings.assert_called_once()
     connector._import_alerts.assert_called_once()
     connector._import_communities.assert_called_once()
     connector._import_ccm_alerts.assert_called_once()

@@ -185,6 +185,10 @@ class FlashpointConfig(ConfigBaseModel):
         description="Whether to import indicators of compromise (IoCs) or not.",
         default=True,
     )
+    import_sightings: bool = Field(
+        description="Whether to import technical-intelligence sightings or not.",
+        default=False,
+    )
     import_alerts: bool = Field(
         description="Whether to import alert data from Flashpoint or not.",
         default=True,
