@@ -168,7 +168,6 @@ services:
     networks:
       - dev-opencti
 
-
 networks:
   dev-opencti:
     driver: bridge
