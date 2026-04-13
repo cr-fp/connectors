@@ -31,6 +31,7 @@ class GTIThreatActorToSTIXComposite(BaseMapper):
         threat_actor: GTIThreatActorData,
         organization: OrganizationAuthor,
         tlp_marking: TLPMarking,
+        enable_threat_actor_aliases: bool = False,
     ) -> None:
         """Initialize the composite mapper.
 
@@ -38,11 +39,13 @@ class GTIThreatActorToSTIXComposite(BaseMapper):
             threat_actor: The GTI threat actor data to convert
             organization: The organization identity object
             tlp_marking: The TLP marking definition
+            enable_threat_actor_aliases: Whether to enable importing threat actor aliases
 
         """
         self.threat_actor = threat_actor
         self.organization = organization
         self.tlp_marking = tlp_marking
+        self.enable_threat_actor_aliases = enable_threat_actor_aliases
 
     def to_stix(self) -> list[Any]:
         """Convert the GTI threat actor to a list of STIX objects (country locations, sectors, intrusion set, relationships).
@@ -75,6 +78,7 @@ class GTIThreatActorToSTIXComposite(BaseMapper):
             threat_actor=self.threat_actor,
             organization=self.organization,
             tlp_marking=self.tlp_marking,
+            enable_threat_actor_aliases=self.enable_threat_actor_aliases,
         )
         intrusion_set = intrusion_set_mapper.to_stix()
         all_entities.append(intrusion_set)
@@ -132,7 +136,6 @@ class GTIThreatActorToSTIXComposite(BaseMapper):
                 modified=modified,
                 start_time=location_with_timing.first_seen,
                 stop_time=location_with_timing.last_seen,
-                description=f"Threat actor '{attributes.name}' targets location '{location.name}'",
             )
             relationships.append(relationship)
 
@@ -151,7 +154,6 @@ class GTIThreatActorToSTIXComposite(BaseMapper):
                 modified=modified,
                 start_time=location_with_timing.first_seen,
                 stop_time=location_with_timing.last_seen,
-                description=f"Threat actor '{attributes.name}' originates from location '{location.name}'",
             )
             relationships.append(relationship)
 
@@ -167,7 +169,6 @@ class GTIThreatActorToSTIXComposite(BaseMapper):
                 modified=modified,
                 start_time=sector_with_timing.first_seen,
                 stop_time=sector_with_timing.last_seen,
-                description=f"Threat actor '{attributes.name}' targets sector '{sector.name}'",
             )
             relationships.append(relationship)
 

@@ -44,15 +44,15 @@ class ConfigConnector:
         # Connector extra parameters
 
         self.api_base_url = get_config_variable_legacy(
-            ["IMPORT_DOCUMENT_AI_API_BASE_URL", "CONNECTOR_WEB_SERVICE_URL"],
-            [["import_document_ai", "api_base_url"], ["connector", "web_service_url"]],
+            ["CONNECTOR_WEB_SERVICE_URL", "IMPORT_DOCUMENT_AI_API_BASE_URL"],
+            [["connector", "web_service_url"], ["import_document_ai", "api_base_url"]],
             self.load,
             required=True,
         )
 
         self.api_key = get_config_variable_legacy(
-            ["IMPORT_DOCUMENT_AI_API_KEY", "CONNECTOR_LICENCE_KEY_PEM"],
-            [["import_document_ai", "api_key"], ["connector", "licence_key_pem"]],
+            ["CONNECTOR_LICENCE_KEY_PEM", "IMPORT_DOCUMENT_AI_API_KEY"],
+            [["connector", "licence_key_pem"], ["import_document_ai", "api_key"]],
             self.load,
             required=True,
         )
@@ -60,10 +60,10 @@ class ConfigConnector:
 
         # Read connector flags from config (create_indicator, web_service_url, etc.)
         self.create_indicator = get_config_variable_legacy(
-            ["IMPORT_DOCUMENT_AI_CREATE_INDICATOR", "IMPORT_DOCUMENT_CREATE_INDICATOR"],
+            ["IMPORT_DOCUMENT_CREATE_INDICATOR", "IMPORT_DOCUMENT_AI_CREATE_INDICATOR"],
             [
-                ["import_document_ai", "create_indicator"],
                 ["import_document", "create_indicator"],
+                ["import_document_ai", "create_indicator"],
             ],
             self.load,
             default=False,
@@ -71,12 +71,12 @@ class ConfigConnector:
 
         self.include_relationships = get_config_variable_legacy(
             [
-                "IMPORT_DOCUMENT_AI_INCLUDE_RELATIONSHIPS",
                 "IMPORT_DOCUMENT_INCLUDE_RELATIONSHIPS",
+                "IMPORT_DOCUMENT_AI_INCLUDE_RELATIONSHIPS",
             ],
             [
-                ["import_document_ai", "include_relationships"],
                 ["import_document", "include_relationships"],
+                ["import_document_ai", "include_relationships"],
             ],
             self.load,
             default=True,

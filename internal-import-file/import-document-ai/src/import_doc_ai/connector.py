@@ -2,7 +2,8 @@
 See : https://github.com/OpenCTI-Platform/connectors/blob/42e0ad002318224e88cac2b4796c0bc136a4aa75/templates/internal-import-file/src/internal_import_file_connector/connector.py
 """
 
-from pycti import OpenCTIConnectorHelper
+import stix2
+from pycti import OpenCTIConnectorHelper, StixCoreRelationship
 
 from .client_api import ImportDocumentAIClient
 from .config_loader import ConfigConnector
@@ -12,6 +13,7 @@ from .util import (
     bulk_update_object_markings,
     compute_bundle_stats,
     convert_location_to_octi_location,
+    deduplicate_bundle_objects,
     download_import_file,
     extend_bundle,
     fetch_octi_allowed_stix_relations_triplets,
@@ -124,6 +126,11 @@ class Connector:
                     [obj["id"] for obj in ai_bundle.get("objects", [])],
                     extend=True,
                 )
+                if "import/global" in file.id:
+                    triggering_entity_stix = update_custom_properties(
+                        {"x_opencti_files": [file.to_custom_property()]},
+                        triggering_entity_stix,
+                    )
                 enrichment_objects_holder.append(triggering_entity_stix)
 
             elif is_an_observed_data_container(triggering_entity_stix):
@@ -142,15 +149,44 @@ class Connector:
                 enrichment_objects_holder.append(triggering_entity_stix)
             else:
                 # otherwise we create a related-to relationship between the
-                # triggering entity and all the indexed objects of the bundle
-                objects_ids = [
+                # triggering entity and the observable objects of the bundle
+                observable_ids = [
                     obj["id"]
-                    for obj in ai_bundle.get("objects", [])
-                    if "id" in obj and obj["type"] != "relationship"
+                    for obj in filter_bundle_observables(ai_bundle).get("objects", [])
+                    if "id" in obj
                 ]
                 enrichment_objects_holder.extend(
-                    relate_to(objects_ids, [triggering_entity_stix["id"]])
+                    relate_to(observable_ids, [triggering_entity_stix["id"]])
                 )
+                contextual_relationships_map = {
+                    "incident": {
+                        "intrusion-set": "attributed-to",
+                        "vulnerability": "targets",
+                        "attack-pattern": "uses",
+                    },
+                    "threat-actor": {
+                        "vulnerability": "targets",
+                        "attack-pattern": "uses",
+                    },
+                }
+                for obj in ai_bundle.get("objects", []):
+                    relation_type = contextual_relationships_map.get(
+                        triggering_entity_stix["type"], {}
+                    ).get(obj.get("type"))
+                    if relation_type and "id" in obj:
+                        enrichment_objects_holder.append(
+                            stix2.Relationship(
+                                id=StixCoreRelationship.generate_id(
+                                    relation_type,
+                                    triggering_entity_stix["id"],
+                                    obj["id"],
+                                ),
+                                relationship_type=relation_type,
+                                source_ref=triggering_entity_stix["id"],
+                                target_ref=obj["id"],
+                                allow_custom=True,
+                            )
+                        )
 
             # Attach triggering entity author and marking_refs to imported objects
             ai_bundle = extend_bundle(ai_bundle, enrichment_objects_holder)
@@ -162,6 +198,8 @@ class Connector:
         else:  # Create a Report with the file
             report = make_report(file, ai_bundle.get("objects", []))
             ai_bundle = extend_bundle(ai_bundle, [report])
+
+        ai_bundle = deduplicate_bundle_objects(ai_bundle)
 
         ## send bundle to OpenCTI
         # TODO sanitize entity with name <2 char

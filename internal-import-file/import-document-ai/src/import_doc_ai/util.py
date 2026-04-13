@@ -195,21 +195,6 @@ class OCTITriggeringEntity:
         return stix2.parse(entity_stix, allow_custom=True)
 
 
-parsed = stix2.parse(
-    {
-        "type": "report",
-        "spec_version": "2.1",
-        "name": "Sample Report",
-        "description": "This is a sample report without object_refs.",
-        "published": "2025-01-10T00:00:00.000Z",
-        "report_types": ["threat-report"],
-        # Note: object_refs is intentionally omitted
-    },
-    allow_custom=True,
-)
-print(parsed)
-
-
 # TODO put example of output in docstring
 def fetch_octi_allowed_stix_relations_triplets(
     helper,
@@ -680,12 +665,9 @@ def update_custom_properties(
     """
     object_dict = json.loads(stix_object.serialize())
     if extend is False:
-        object_dict["custom_properties"] = custom_properties
-        return stix2.parse(object_dict, allow_custom=True)
-    object_dict["custom_properties"] = {
-        **object_dict.get("custom_properties", {}),
-        **custom_properties,
-    }
+        for key in custom_properties:
+            object_dict.pop(key, None)
+    object_dict.update(custom_properties)
     return stix2.parse(object_dict, allow_custom=True)
 
 

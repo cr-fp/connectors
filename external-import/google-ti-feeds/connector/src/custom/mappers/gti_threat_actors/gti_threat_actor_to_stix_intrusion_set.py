@@ -55,7 +55,6 @@ class GTIThreatActorToSTIXIntrusionSet(BaseMapper):
             marking_ids=src_entity.object_marking_refs,
             created=datetime.now(tz=timezone.utc),
             modified=datetime.now(tz=timezone.utc),
-            description=f"{type(src_entity).__name__} {relation_type} {type(target_entity).__name__}",
         )
 
     def __init__(
@@ -63,6 +62,7 @@ class GTIThreatActorToSTIXIntrusionSet(BaseMapper):
         threat_actor: GTIThreatActorData,
         organization: OrganizationAuthor,
         tlp_marking: TLPMarking,
+        enable_threat_actor_aliases: bool = False,
     ) -> None:
         """Initialize the GTIThreatActorToSTIXIntrusionSet object.
 
@@ -70,11 +70,13 @@ class GTIThreatActorToSTIXIntrusionSet(BaseMapper):
             threat_actor (GTIThreatActorData): The GTI threat actor data to convert.
             organization (OrganizationAuthor): The organization identity object.
             tlp_marking (TLPMarking): The TLP marking definition.
+            enable_threat_actor_aliases (bool): Whether to enable importing threat actor aliases.
 
         """
         self.threat_actor = threat_actor
         self.organization = organization
         self.tlp_marking = tlp_marking
+        self.enable_threat_actor_aliases = enable_threat_actor_aliases
 
     def to_stix(self) -> IntrusionSet:
         """Convert the GTI threat actor to a STIX intrusion set object.
@@ -96,7 +98,11 @@ class GTIThreatActorToSTIXIntrusionSet(BaseMapper):
             attributes.last_modification_date, tz=timezone.utc
         )
 
-        # aliases = self._extract_aliases(attributes)
+        aliases = (
+            self._extract_aliases(attributes)
+            if self.enable_threat_actor_aliases
+            else None
+        )
 
         first_seen, last_seen = self._extract_seen_dates(attributes)
 
@@ -116,7 +122,7 @@ class GTIThreatActorToSTIXIntrusionSet(BaseMapper):
             organization_id=self.organization.id,
             marking_ids=[self.tlp_marking.id],
             description=description,
-            #  aliases=aliases,
+            aliases=aliases,
             first_seen=first_seen,
             last_seen=last_seen,
             primary_motivation=primary_motivation,
@@ -151,7 +157,9 @@ class GTIThreatActorToSTIXIntrusionSet(BaseMapper):
         aliases = []
         for alt_name in attributes.alt_names_details:
             if hasattr(alt_name, "value") and alt_name.value:
-                aliases.append(alt_name.value)
+                # Remove source from alias to prevent deduplication issue
+                alt_name_without_source = alt_name.value.split(" (", 1)[0]
+                aliases.append(alt_name_without_source)
 
         return aliases if aliases else None
 
