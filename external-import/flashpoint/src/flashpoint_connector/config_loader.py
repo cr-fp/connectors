@@ -177,21 +177,17 @@ class FlashpointConfig(ConfigBaseModel):
         description="Whether to import reports from Flashpoint or not.",
         default=True,
     )
-    indicators_in_reports: bool = Field(
-        description="Whether to include indicators in the reports imported from MispFeed or not.",
-        default=False,
-    )
-    create_reports: bool = Field(
-        description="Whether to create reports or groupings from MispFeed events or not.",
-        default=False,
-    )
     guess_relationships_from_reports: bool = Field(
         description="Whether to guess relationships between entities or not.",
         default=False,
     )
     import_indicators: bool = Field(
-        description="WHether to import indicators of compromise (IoCs) or not.",
+        description="Whether to import indicators of compromise (IoCs) or not.",
         default=True,
+    )
+    import_sightings: bool = Field(
+        description="Whether to import technical-intelligence sightings or not.",
+        default=False,
     )
     import_alerts: bool = Field(
         description="Whether to import alert data from Flashpoint or not.",
@@ -217,6 +213,16 @@ class FlashpointConfig(ConfigBaseModel):
         description="Whether to import only fresh Compromised Credentials Monitoring alerts or all of them.",
         default=True,
     )
+    indicator_tlp: Literal[
+        "TLP:CLEAR",
+        "TLP:GREEN",
+        "TLP:AMBER",
+        "TLP:AMBER+STRICT",
+        "TLP:RED",
+    ] = Field(
+        description="TLP marking applied to imported indicators.",
+        default="TLP:CLEAR",
+    )
 
 
 class ConfigLoader(BaseSettings):
@@ -233,6 +239,7 @@ class ConfigLoader(BaseSettings):
 
     # Setup model config and env vars parsing
     model_config = SettingsConfigDict(
+        extra="allow",
         frozen=True,
         env_nested_delimiter="_",
         env_nested_max_split=1,
